@@ -1,6 +1,6 @@
 # OpenMCP Docker 部署指南
 
-这个目录包含了部署OpenMCP应用的Docker配置文件。
+这个目录包含了部署OpenMCP应用的Docker配置文件。本项目使用uv包管理工具和现代化Python项目结构，依赖通过`pyproject.toml`和`uv.lock`文件管理。
 
 ## 目录结构
 
@@ -38,20 +38,55 @@ docker-compose up -d
 - 后端API服务: `http://localhost:9000`
 - 热榜API服务: `http://localhost:6688`
 
-## 使用uv包管理
+## 依赖管理 (使用 uv)
 
-本项目使用了uv包管理工具替代传统的pip。如果需要更新依赖，可以：
+本项目使用uv包管理工具替代传统的pip和requirements.txt。uv是一个现代化的Python包管理器，具有更快的安装速度、更可靠的依赖解析和更好的缓存机制。
 
-1. 在本地使用uv更新依赖：
+### 为什么使用uv而不是requirements.txt
+
+- **更快的安装速度**: uv安装依赖比pip快5-10倍
+- **确定性构建**: 使用uv.lock文件确保依赖版本一致
+- **更好的缓存**: 使用持久化缓存卷提高重复构建速度
+- **现代化项目结构**: 通过pyproject.toml集中管理项目配置
+
+### 如何使用uv管理依赖
+
+1. **安装uv**:
 ```bash
-# 安装uv
+# 在Linux/macOS上安装
 curl -sSf https://astral.sh/uv/install.sh | sh
 
-# 导出依赖到requirements.txt
+# 在Windows上安装
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+2. **添加新依赖**:
+```bash
+cd apps
+uv pip install package_name
+```
+这会自动更新pyproject.toml和uv.lock文件。
+
+3. **从现有配置安装依赖**:
+```bash
+cd apps
+uv pip sync
+```
+
+4. **导出为requirements.txt** (如果需要):
+```bash
+cd apps
 uv pip freeze > requirements.txt
 ```
 
-2. 重新构建Docker镜像：
+### 在Docker中使用uv
+
+我们的Dockerfile已配置为使用uv:
+- 先复制pyproject.toml和uv.lock文件
+- 使用uv安装依赖
+- 使用持久化缓存卷加速重复构建
+
+如果更新了依赖，重新构建Docker镜像即可:
 ```bash
 docker-compose build --no-cache backend
 docker-compose up -d
@@ -67,33 +102,53 @@ volumes:
   - ../apps:/app/apps
 ```
 
-2. 可以添加开发工具（如调试器）到Dockerfile中：
+2. 使用uv的开发模式安装依赖:
 ```dockerfile
-RUN pip install debugpy
+RUN uv pip install --dev --system -i https://mirrors.aliyun.com/pypi/simple/ .
+```
+
+3. 对于本地开发，您可以创建一个独立的虚拟环境:
+```bash
+cd apps
+uv venv .venv
+uv pip sync
+source .venv/bin/activate  # 在Linux/macOS上
+# 或者
+.venv\Scripts\activate     # 在Windows上
 ```
 
 ## 故障排除
 
-如果您遇到问题：
+如果您遇到依赖相关问题：
 
-1. 检查容器日志：
+1. **检查uv.lock文件是否存在并最新**:
 ```bash
-docker-compose logs -f backend
+ls -la apps/uv.lock
 ```
 
-2. 进入容器内部检查：
+2. **重新生成uv.lock文件**:
 ```bash
-docker-compose exec backend /bin/sh
+cd apps
+uv pip sync --upgrade
 ```
 
-3. 检查网络连接：
+3. **检查容器内的依赖**:
 ```bash
-docker network inspect openmcp-network
+docker-compose exec backend python -m pip list
 ```
 
-4. 常见问题：
+4. **uv缓存问题**:
+```bash
+# 清除uv缓存
+docker-compose down
+docker volume rm openmcp-uv-cache
+docker-compose up -d
+```
+
+5. **其他常见问题**:
    - 如果热榜API无法访问，检查`DAILYHOT_API_URL`环境变量是否正确设置
    - 如果端口冲突，修改`.env`文件中的相应端口配置
+   - 如果依赖安装失败，检查`pyproject.toml`中的依赖配置
 
 ## Docker Compose命令参考
 
@@ -117,22 +172,27 @@ docker-compose down -v
 docker-compose ps
 
 # 进入容器内部(例如进入后端容器)
-docker-compose exec backend bash
+docker-compose exec backend /bin/sh
 ```
 
 ## 进阶配置
 
-### 性能优化
+### 优化Docker构建
 
-- **后端服务**: 可以调整uvicorn的工作进程数和线程数
-```yaml
-CMD ["uvicorn", "apps.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
-```
+- **多阶段构建**: 对于复杂项目可以考虑使用多阶段构建减小最终镜像大小
+```dockerfile
+FROM python:3.12-alpine AS builder
+# 安装uv和依赖
+RUN curl -sSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:${PATH}"
+COPY apps/pyproject.toml apps/uv.lock /app/
+WORKDIR /app
+RUN uv pip install --system --no-deps .
 
-- **Nginx配置**: 可以调整工作进程数和连接数，在nginx.conf中添加
-```
-worker_processes auto;
-worker_connections 1024;
+FROM python:3.12-alpine
+# 只复制已安装的依赖和必要文件
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY apps /app/apps
 ```
 
 ### 使用外部数据源
@@ -143,7 +203,7 @@ worker_connections 1024;
 
 对于生产环境，建议额外配置：
 
-1. **HTTPS支持**: 更新Nginx配置，添加SSL证书
+1. **HTTPS支持**: 配置反向代理如Nginx或Traefik，处理SSL终结
 2. **环境隔离**: 为开发、测试和生产环境使用不同的docker-compose文件
 3. **资源限制**: 在docker-compose.yml中添加资源限制
 ```yaml

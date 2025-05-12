@@ -1,6 +1,6 @@
 from starlette.responses import HTMLResponse
 from starlette.requests import Request
-from server import server_app
+from common.server import server_app
 
 
 @server_app.custom_route("/", methods=["GET"])

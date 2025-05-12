@@ -6,9 +6,7 @@ WORKDIR /app
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
+    PYTHONUNBUFFERED=1
 
 # 替换为国内阿里云源
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
@@ -21,16 +19,12 @@ RUN apk add --no-cache \
     openssl-dev \
     curl
 
-# 安装 uv 包管理工具
-RUN curl -sSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
-
 # 复制项目文件
 COPY apps /app/apps
 COPY requirements.txt /app/
 
-# 使用uv安装Python依赖
-RUN uv pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+# 安装Python依赖
+RUN pip install  -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 设置Python导入路径，确保能找到apps和common模块
 ENV PYTHONPATH="/app:/app/apps"
@@ -38,5 +32,5 @@ ENV PYTHONPATH="/app:/app/apps"
 # 暴露端口
 EXPOSE 9000
 
-# 设置容器启动命令 - 使用SSE模式并绑定到0.0.0.0使其在容器外可访问
+# 设置容器启动命令
 CMD ["python", "/app/apps/main.py"] 
