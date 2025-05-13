@@ -3,7 +3,7 @@ from fastmcp.client.transports import StreamableHttpTransport
 import asyncio
 
 headers = {"Authorization": "Bearer mytoken"}
-transport = StreamableHttpTransport(url="http://localhost:9000/mcp", headers=headers)
+transport = StreamableHttpTransport(url="http://82.156.47.117:9000/mcp", headers=headers)
 client = Client(transport)
 
 async def main():

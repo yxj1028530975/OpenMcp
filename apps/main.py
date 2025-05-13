@@ -6,7 +6,7 @@ from common.main_ui import *
 
 if __name__ == "__main__":
     server_app.run(
-        transport="streamable-http",
+        transport="sse",
         host="0.0.0.0",
         port=9000,
         path="/mcp",
