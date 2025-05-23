@@ -1,6 +1,8 @@
 from common.server import server_app
-from application.weather.weather_api import *
-from application.DailyHotApi.dailyhot_api import *
+# from application.weather.weather_api import *
+# from application.DailyHotApi.dailyhot_api import *
+# from application.wechat_xxxbot.wechat_xxxbot_api import *
+from application.odoo_data.odoo_data_api import *
 from common.main_ui import *
 
 

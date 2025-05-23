@@ -1,0 +1,4 @@
+[odoo_data]
+enable = true
+command = ["odoo_data"]
+base_url = "http://127.0.0.1:8881"
